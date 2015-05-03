@@ -1,0 +1,106 @@
+#!/bin/bash
+#TODO Allow user specified excluded folders
+OLDPWD=`pwd`
+
+function echostderr {
+	>&2 echo "$@"
+}
+
+function usage {
+	echostderr
+	echostderr
+	echostderr "Android Repo Changelog Generator"
+	echostderr "Show commit comments from all repos within the given timeframe."
+	echostderr
+	echostderr "Usage:"
+	echostderr "    $0 since_date> [<until_date>]"
+	echostderr
+	echostderr "Must be run from the top of tree (try running 'croot' first)"
+	echostderr
+
+	echostderr "<since_date>"
+	echostderr "    Show commits more recent than a specific date."
+	echostderr
+	echostderr "<until_date>"
+	echostderr "    Show commits older than a specific date."
+
+	echostderr
+	echostderr
+	echostderr "If <until_date> is omitted then all commits from <since_date> until now are included."
+	echostderr
+	echostderr "Example:"
+	echostderr
+	echostderr "    $0 \"2015-04-09T00:00:01Z\" \"2015-04-14T04:25:00Z\""
+	echostderr
+	echostderr
+
+}
+
+if [[ "$#" -lt 1 || "$#" -gt 2 ]]
+then
+	usage 
+	exit
+fi
+
+if [ ! -d .repo ]
+then
+	echostderr "First change directory to the top of the tree (try running 'croot') before running '$0'"
+	exit
+fi
+
+ROOTPWD=`pwd`
+
+echostderr "Finding repos..."
+IFS='\n' readarray -t gitFiles <<< `find . -path ./.repo -prune -o -name .git -print`
+#gitFiles=`find . -path ./.repo -prune -o -name .git -print`
+IFS=' ' gitFilesNewLines=( $gitFiles )
+
+total=`echo $gitFilesNewLines | wc -l`
+count=0
+
+
+
+echostderr "Examining logs..."
+
+for gitFile in $gitFiles
+do 
+	if [[ $progressBar == true ]]
+	then
+		showBar $count $total
+	fi
+
+	DIR=`dirname $gitFile`
+	pushd $DIR > /dev/null
+
+	repoName=${DIR/#\.\//}
+	repoName=${repoName//\//_}
+	
+	logs=`git log --date="iso" --since="$1"  --until="$2" --oneline`
+
+	if [[ $? -ne 0 ]]
+	then
+		echostderr
+		echostderr "Error processing repository \"$repoName\" \($gitFile\)"
+		echostderr
+		exit
+	fi
+
+	if [[ ${#logs} -ne 0 ]]
+	then 
+		echo
+		echo "[$repoName]"
+		IFS='\n' readarray -t logArray <<< "$logs"
+
+		index=0
+		while [[ 0 -ne ${#logArray[$index]} ]]
+		do 
+			echo ${logArray[$index]}
+			let index=index+1
+		done
+	fi
+
+	popd > /dev/null
+done
+
+
+
